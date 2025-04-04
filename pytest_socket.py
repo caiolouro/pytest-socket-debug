@@ -13,6 +13,7 @@ _true_connect = socket.socket.connect
 
 class SocketBlockedError(RuntimeError):
     def __init__(self, *_args, **_kwargs):
+        print(f"[pytest-socket] A test tried to use socket.socket.")
         super().__init__("A test tried to use socket.socket.")
 
 
@@ -20,10 +21,9 @@ class SocketConnectBlockedError(RuntimeError):
     def __init__(self, allowed, host, *_args, **_kwargs):
         if allowed:
             allowed = ",".join(allowed)
-        super().__init__(
-            "A test tried to use socket.socket.connect() "
-            f'with host "{host}" (allowed: "{allowed}").'
-        )
+        msg = f'[pytest-socket] A test tried to use socket.socket.connect() with host "{host} (allowed: "{allowed}").'
+        print(msg)
+        super().__init__(msg)
 
 
 def pytest_addoption(parser):
@@ -98,9 +98,10 @@ def disable_socket(allow_unix_socket=False):
 
         def __new__(cls, family=-1, type=-1, proto=-1, fileno=None):
             if _is_unix_socket(family) and allow_unix_socket:
+                print(f"[pytest-socket] Socket creation allowed for UNIX: {family=}, {type=}, {proto=}, {fileno=}")
                 return super().__new__(cls, family, type, proto, fileno)
 
-            print(f"Socket creation blocked: {family=}, {type=}, {proto=}, {fileno=}")
+            print(f"[pytest-socket] Socket creation blocked: {family=}, {type=}, {proto=}, {fileno=}")
             raise SocketBlockedError()
 
     socket.socket = GuardedSocket
@@ -143,6 +144,7 @@ def pytest_runtest_setup(item) -> None:
     If the given item is not a function test (i.e a DoctestItem)
     or otherwise has no support for fixtures, skip it.
     """
+    print(f"[pytest-socket] pytest_runtest_setup start")
     if not hasattr(item, "fixturenames"):
         return
 
@@ -155,6 +157,7 @@ def pytest_runtest_setup(item) -> None:
         or item.get_closest_marker("enable_socket")
         or socket_config.socket_force_enabled
     ):
+        print(f"[pytest-socket] pytest_runtest_setup enable_socket: {item.name=}")
         enable_socket()
         return
 
@@ -162,6 +165,7 @@ def pytest_runtest_setup(item) -> None:
     if "socket_disabled" in item.fixturenames or item.get_closest_marker(
         "disable_socket"
     ):
+        print(f"[pytest-socket] pytest_runtest_setup disable_socket: {item.name=}")
         disable_socket(socket_config.allow_unix_socket)
         return
 
@@ -170,6 +174,7 @@ def pytest_runtest_setup(item) -> None:
 
     # Finally, check the global config and disable socket if needed.
     if socket_config.socket_disabled and not hosts:
+        print(f"[pytest-socket] pytest_runtest_setup disable_socket (finally): {item.name=}")
         disable_socket(socket_config.allow_unix_socket)
 
 
@@ -282,9 +287,10 @@ def socket_allow_hosts(
         if host in allowed_ip_hosts_and_hostnames or (
             _is_unix_socket(inst.family) and allow_unix_socket
         ):
+            print(f"[pytest-socket] socket connect allowed: {host=}, {inst.family=}")
             return _true_connect(inst, *args)
 
-        print(f"socket connect blocked error: {host=}, {allowed_list=}")
+        print(f"[pytest-socket] socket connect blocked error: {host=}, {allowed_list=}")
         raise SocketConnectBlockedError(allowed_list, host)
 
     socket.socket.connect = guarded_connect
