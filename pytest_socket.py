@@ -100,6 +100,7 @@ def disable_socket(allow_unix_socket=False):
             if _is_unix_socket(family) and allow_unix_socket:
                 return super().__new__(cls, family, type, proto, fileno)
 
+            print(f"Socket creation blocked: {family=}, {type=}, {proto=}, {fileno=}")
             raise SocketBlockedError()
 
     socket.socket = GuardedSocket
@@ -283,6 +284,7 @@ def socket_allow_hosts(
         ):
             return _true_connect(inst, *args)
 
+        print(f"socket connect blocked error: {host=}, {allowed_list=}")
         raise SocketConnectBlockedError(allowed_list, host)
 
     socket.socket.connect = guarded_connect
