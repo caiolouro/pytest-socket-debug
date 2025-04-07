@@ -21,7 +21,7 @@ class SocketConnectBlockedError(RuntimeError):
     def __init__(self, allowed, host, *_args, **_kwargs):
         if allowed:
             allowed = ",".join(allowed)
-        msg = f'[pytest-socket] A test tried to use socket.socket.connect() with host "{host} (allowed: "{allowed}").'
+        msg = f'[pytest-socket] blocked {host}'
         print(msg)
         super().__init__(msg)
 
@@ -290,7 +290,6 @@ def socket_allow_hosts(
             print(f"[pytest-socket] socket connect allowed: {host=}, {inst.family=}")
             return _true_connect(inst, *args)
 
-        print(f"[pytest-socket] socket connect blocked error: {host=}, {allowed_list=}")
         raise SocketConnectBlockedError(allowed_list, host)
 
     socket.socket.connect = guarded_connect
