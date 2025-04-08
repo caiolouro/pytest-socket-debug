@@ -2,6 +2,7 @@ import ipaddress
 import itertools
 import socket
 import typing
+import datetime
 from collections import defaultdict
 
 import pytest
@@ -10,13 +11,21 @@ _true_socket = socket.socket
 _true_connect = socket.socket.connect
 
 
+def log_debug(message):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[pytest-socket] {timestamp} - {message}")
+
+
 class SocketBlockedError(RuntimeError):
     def __init__(self, *_args, **_kwargs):
+        log_debug("Blocked socket creation")
         super().__init__("A test tried to use socket.socket.")
 
 
 class SocketConnectBlockedError(RuntimeError):
     def __init__(self, allowed, host, *_args, **_kwargs):
+        log_debug(f"Blocked connection to host: {host}")
+
         if allowed:
             allowed = ",".join(allowed)
         super().__init__(
@@ -247,6 +256,7 @@ def socket_allow_hosts(allowed=None, allow_unix_socket=False):
         if host in allowed_ip_hosts_and_hostnames or (
             _is_unix_socket(inst.family) and allow_unix_socket
         ):
+            log_debug("Allowed connection to host: {host}")
             return _true_connect(inst, *args)
 
         raise SocketConnectBlockedError(allowed_list, host)
