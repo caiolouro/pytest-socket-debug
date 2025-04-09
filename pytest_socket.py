@@ -228,14 +228,17 @@ def normalize_allowed_hosts(
     return ip_hosts
 
 
-def socket_allow_hosts(allowed=None, allow_unix_socket=False):
-    """disable socket.socket.connect() to disable the Internet. useful in testing."""
-    if isinstance(allowed, str):
-        allowed = allowed.split(",")
-
-    if not isinstance(allowed, list):
-        return
-
+def prepare_allowed_hosts(allowed):
+    """Prepare allowed hosts data structures for host filtering.
+    
+    Args:
+        allowed: List of allowed hosts to normalize
+        
+    Returns:
+        tuple: (allowed_ip_hosts_and_hostnames, allowed_list) where:
+            - allowed_ip_hosts_and_hostnames is a set for quick lookup
+            - allowed_list is a formatted list for display
+    """
     allowed_ip_hosts_by_host = normalize_allowed_hosts(allowed)
     allowed_ip_hosts_and_hostnames = set(
         itertools.chain(*allowed_ip_hosts_by_host.values())
@@ -250,14 +253,34 @@ def socket_allow_hosts(allowed=None, allow_unix_socket=False):
             for host, normalized in allowed_ip_hosts_by_host.items()
         ]
     )
+    
+    return allowed_ip_hosts_and_hostnames, allowed_list
+
+
+def socket_allow_hosts(allowed=None, allow_unix_socket=False):
+    """disable socket.socket.connect() to disable the Internet. useful in testing."""
+    if isinstance(allowed, str):
+        allowed = allowed.split(",")
+
+    if not isinstance(allowed, list):
+        return
+        
+    allowed_ip_hosts_and_hostnames, allowed_list = prepare_allowed_hosts(allowed)
 
     def guarded_connect(inst, *args):
+        nonlocal allowed_ip_hosts_and_hostnames, allowed_list
         host = host_from_connect_args(args)
         if host in allowed_ip_hosts_and_hostnames or (
             _is_unix_socket(inst.family) and allow_unix_socket
         ):
-            log_debug("Allowed connection to host: {host}")
+            log_debug(f"Allowed connection to host: {host}")
             return _true_connect(inst, *args)
+        else:
+            log_debug(f"Refreshing hosts resolution for host: {host}")
+            allowed_ip_hosts_and_hostnames, allowed_list = prepare_allowed_hosts(allowed)
+            if host in allowed_ip_hosts_and_hostnames:
+                log_debug(f"Allowed connection to host: {host}")
+                return _true_connect(inst, *args)
 
         raise SocketConnectBlockedError(allowed_list, host)
 
